@@ -5,8 +5,7 @@ def fibonacci(n):
     """Calcula el enésimo número de la serie de Fibonacci de manera recursiva"""
     if n <= 1:
         return n
-    else:
-        return fibonacci(n - 1) + fibonacci(n - 2)
+    return fibonacci(n - 1) + fibonacci(n - 2)  # Aquí está la recursion
 
 
 def print_fibonacci_sequence(count):
@@ -19,10 +18,11 @@ def print_fibonacci_sequence(count):
     else:
         print("Fibonacci sequence:")
         for i in range(count):
-            # print(fibonacci(i + 1), end=" ") # Sin incluir el cero "0" en la serie
-            print(fibonacci(i), end=" ") # Incluyendo el cero "0" en la serie
+            # print(fibonacci(i + 1), end=" ") # Sin incluir el "0" en la serie
+            print(fibonacci(i), end=" ")  # Incluyendo el "0" en la serie
         print('')
 
-# Solicita número de términos para serie Fibonacci y llama a la función para imprimirla.
+
+# Ingresa términos para serie Fibonacci y llama la función para imprimirla.
 num = int(input("Ingrese el número de términos para la serie Fibonacci: "))
 print_fibonacci_sequence(num)
