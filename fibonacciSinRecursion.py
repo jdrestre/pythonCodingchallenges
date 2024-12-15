@@ -1,3 +1,6 @@
+"""Fibonacci serie sin recursion"""
+
+
 def fibonacci_series(n):
     """Calcula los n términos de la serie Fibonacci y los guarda en una lista"""
     a, b = 0, 1
@@ -6,6 +9,7 @@ def fibonacci_series(n):
         series.append(a)
         a, b = b, a + b
     return series
+
 
 num_terms = int(input("Ingrese número de términos: "))
 if num_terms <= 0:
