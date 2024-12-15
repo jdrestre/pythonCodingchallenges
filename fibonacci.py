@@ -16,7 +16,7 @@ def print_fibonacci_sequence(count):
     if count <= 0:
         print("Ingrese un número positivo.")
     else:
-        print("Fibonacci sequence:")
+        print("Serie Fibonacci con `recursion`:")
         for i in range(count):
             # print(fibonacci(i + 1), end=" ") # Sin incluir el "0" en la serie
             print(fibonacci(i), end=" ")  # Incluyendo el "0" en la serie
