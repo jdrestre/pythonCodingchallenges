@@ -2,14 +2,14 @@
 Imprimir editando el texto con pyfiglet, colorama módulo Fore
 """
 
-from colorama import Fore
+from colorama import Fore, Style
 import pyfiglet
 
-ascii_art = pyfiglet.figlet_format("Feliz Navidad'", font='dos_rebel')
-print(ascii_art)
+# ascii_art = pyfiglet.figlet_format("Feliz Navidad'", font='dos_rebel')
+# print(ascii_art)
 
 font = pyfiglet.figlet_format("Feliz Navidad'", font='dos_rebel')
-print(Fore.RED + font)
+print(("\n" * 4) + Fore.RED + font + Style.RESET_ALL)
 
 # available_fonts = pyfiglet.FigletFont.getFonts()
 # print(available_fonts)
