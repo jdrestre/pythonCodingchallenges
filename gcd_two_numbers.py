@@ -1,6 +1,6 @@
 """
-Agregando forma para calcular MCM sin importar módulo `math` a partir del 
-"Greatest Common Divisor" GCM o "Máximo Común Divisor" MCD
+Calcular "Greatest Common Divisor" GCM o "Máximo Común Divisor" MCD sin importar 
+módulo `math`
 """
 
 
