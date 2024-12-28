@@ -1,0 +1,24 @@
+# Pasos para actualizar las bibliotecas a sus versiones mas recientes
+# 1. Crea un archivo con las bibliotecas instaladas 
+#       `pip freeze > requirements.txt`
+# 2. Borrar el número de versiones a dentro de `requirements.txt` para las que 
+# sea necesario
+# 3. Actualiza todas a las bibliotecas a sus versiones mas recientes
+#       `pip install --upgrade -r requirements.txt`
+
+
+beautifulsoup4
+certifi
+charset-normalizer
+colorama
+googlesearch-python
+idna
+numpy
+periodictable
+pyfiglet
+pyparsing
+requests
+soupsieve
+termcolor
+urllib3
+yt-dlp
