@@ -1,8 +1,12 @@
-"""Este script obtiene las tendencias de búsqueda actuales en Bing para un país o región específica. Utiliza la API de Bing News Search para obtener las tendencias de búsqueda actuales en un país o región específica."""
+"""
+Este script obtiene las tendencias de búsqueda actuales en Bing para un país o 
+región específica. Utiliza la API de Bing News Search para obtener las 
+tendencias de búsqueda actuales en un país o región específica.
+"""
 
+import os
 import requests
 from dotenv import load_dotenv
-import os
 
 # Cargar las variables de entorno desde el archivo .env
 load_dotenv()
@@ -42,9 +46,13 @@ def get_bing_trending_searches(region):
     region (str): Código del país o región (por ejemplo, 'es-CO' para Colombia, 'en-US' para Estados Unidos).
     """
     api_key = os.getenv('BING_API_KEY')
+    api_endpoint = os.getenv('BING_API_ENDPOINT')
     if not api_key:
         raise ValueError(
             "La clave de API de Bing no está configurada en el archivo .env")
+    if not api_endpoint:
+        raise ValueError(
+            "El endpoint de la API de Bing no está configurado en el archivo .env")
 
     headers = {
         'Ocp-Apim-Subscription-Key': api_key,
@@ -52,8 +60,7 @@ def get_bing_trending_searches(region):
     params = {
         'mkt': region,
     }
-    response = requests.get(
-        'https://api.bing.microsoft.com/v7.0/news/trendingtopics', headers=headers, params=params)
+    response = requests.get(api_endpoint, headers=headers, params=params)
     response.raise_for_status()
     trending_searches = response.json()
 
