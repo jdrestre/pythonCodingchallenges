@@ -1,17 +1,16 @@
 """
-Este script obtiene las tendencias de búsqueda actuales en Bing para un país o 
-región específica. Utiliza la API de Bing News Search para obtener las 
-tendencias de búsqueda actuales en un país o región específica.
-"""
+Este script obtiene las tendencias de búsqueda actuales en Bing para un país o región específica. Utiliza la API de Bing News Search para obtener las tendencias de búsqueda actuales en un país o región específica.
+""" # pylint: disable=line-too-long
 
 import os
 import requests
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # cSpell:ignore dotenv
 
 # Cargar las variables de entorno desde el archivo .env
-load_dotenv()
+load_dotenv()  # cSpell:ignore dotenv
 
 # Lista de códigos de países para América
+# cSpell: ignore bolivia, brazil, canada, chile, colombia, costa, cuba, dominican, ecuador, el, guatemala, honduras, mexico, nicaragua, panama, paraguay, peru, puerto, uruguay, venezuela # pylint: disable=line-too-long
 country_codes = {
     'argentina': 'es-AR',
     'bolivia': 'es-BO',
@@ -40,10 +39,10 @@ country_codes = {
 
 def get_bing_trending_searches(region):
     """
-    Obtiene las tendencias de búsqueda actuales en Bing para una región específica.
+    Obtiene las tendencias de búsqueda actuales en Bing para un país específica.
 
     Parámetros:
-    region (str): Código del país o región (por ejemplo, 'es-CO' para Colombia, 'en-US' para Estados Unidos).
+    region (str): Código del país (por ejemplo, 'es-CO' para Colombia, 'en-US' para Estados Unidos).
     """
     api_key = os.getenv('BING_API_KEY')
     api_endpoint = os.getenv('BING_API_ENDPOINT')
@@ -56,11 +55,12 @@ def get_bing_trending_searches(region):
 
     headers = {
         'Ocp-Apim-Subscription-Key': api_key,
-    }
+    }  # cSpell:ignore Apim
     params = {
         'mkt': region,
     }
-    response = requests.get(api_endpoint, headers=headers, params=params)
+    response = requests.get(api_endpoint, headers=headers,
+                            params=params, timeout=10)
     response.raise_for_status()
     trending_searches = response.json()
 
@@ -70,11 +70,11 @@ def get_bing_trending_searches(region):
 
 
 if __name__ == "__main__":
-    # Solicita al usuario que ingrese el nombre del país o región
+    # Solicita al usuario que ingrese el nombre del país
     country_name = input(
-        "Ingrese el nombre del país o región (por ejemplo, 'colombia', 'united states'): ").strip().lower()
+        "Ingrese el nombre del país (por ejemplo, 'colombia', 'united states'): ").strip().lower()
 
-    # Obtiene el código del país o región
+    # Obtiene el código del país
     region_code = country_codes.get(country_name)
     if not region_code:
         print("País o región no válido.")
