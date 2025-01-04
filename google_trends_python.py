@@ -1,6 +1,6 @@
 """
 Este script obtiene las tendencias de búsqueda actuales para una región específica. Utiliza el motor de búsqueda de Google Trends para obtener las tendencias de búsqueda actuales para una región específica. Para ello, se utiliza la biblioteca pytrends, que proporciona una interfaz para interactuar con la API de Google Trends. El script solicita al usuario que ingrese el nombre del país o región para la cual desea obtener las tendencias de búsqueda. Luego, utiliza la función trending_searches de la clase TrendReq de pytrends para obtener las tendencias de búsqueda actuales para la región especificada. Finalmente, imprime las diez primeras tendencias de búsqueda numeradas.
-"""
+""" # pylint: disable=line-too-long # cSpell:ignore pytrends
 
 from pytrends.request import TrendReq
 
@@ -27,7 +27,7 @@ def get_trending_searches_by_region(region):
 
 
 if __name__ == "__main__":
-    # Solicita al usuario que ingrese el nombre del país o región
+    # Solicita al usuario que ingrese el nombre del país
     region_ = input(
         "Ingrese el nombre del país o región (por ejemplo, 'colombia', 'united_states'): ").strip().lower()
 
