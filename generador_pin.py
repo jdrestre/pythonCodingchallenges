@@ -1,9 +1,12 @@
 """
-Generador de PIN Criptográficamente Seguro.
+Generador de PIN Criptográficamente Seguro y Blindado.
 
-Este módulo genera un PIN aleatorio de longitud variable (4-8 dígitos)
-utilizando fuentes de entropía segura (secrets), validando que no existan
-dígitos consecutivos, repetidos o patrones comunes (lista negra).
+Combina:
+1. CSPRNG (secrets)
+2. Reglas Matemáticas (No consecutivos)
+3. Reglas Topológicas (No adyacentes físicos en teclado)
+4. Reglas Semánticas (Blacklist de años y patrones)
+5. Validación de tiempo constante (Anti-Timing Attacks).
 """
 
 import secrets
@@ -11,124 +14,129 @@ import string
 import logging
 import math
 import sys
-from typing import List, Set, Optional
+import hmac
+from typing import List, Set, Optional, Dict
 
-# Configuración de Logging (Para auditoría del sistema, no para el usuario final)
+# Configuración de Logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger("GeneradorPin")
+logger = logging.getLogger("GeneradorBlindado")
 
 
-class GeneradorPinSeguro:
+class GeneradorPinBlindado:
     """
-    Clase encargada de la generación segura de PINs.
-    Implementa reglas de negocio y validaciones criptográficas.
+    Generador de PINs de alta seguridad.
+    Integra validaciones matemáticas, espaciales y de listas negras.
     """
 
     def __init__(self, blacklist_extra: Optional[List[str]] = None):
         """
-        Inicializa el generador con una lista negra base y opcional.
+        Inicializa reglas semánticas (blacklist) y físicas (mapa de teclado).
         """
-        # Blacklist base: patrones visuales o numéricos comunes
+        # --- CAPA 1: Semántica (Blacklist) ---
         self.blacklist: Set[str] = {
-            "1010", "1212", "6969", "1313",  # Repeticiones alternas
-            "1379", "2580",  # Patrones de esquinas/cruz en teclado
+            "1010", "1212", "6969", "1313",
+            "1379", "2580",  # Patrones cruzados muy obvios
             "0000", "1111", "2222", "3333", "4444",
             "5555", "6666", "7777", "8888", "9999"
         }
-
-        # Agregar años comunes (ej. 1950-2030) a la blacklist
+        # Agregar años comunes (1950-2030)
         for year in range(1950, 2031):
             self.blacklist.add(str(year))
 
         if blacklist_extra:
             self.blacklist.update(blacklist_extra)
 
-    def _es_transicion_valida(self, actual: int, previo: int) -> bool:
-        """
-        Verifica reglas matemáticas entre dos dígitos adyacentes.
+        # --- CAPA 2: Topológica (Mapa del Teclado) ---
+        # Define vecinos físicos (vertical/horizontal) en teclado numérico.
+        # 1 2 3
+        # 4 5 6
+        # 7 8 9
+        #   0
+        self.adyacencias_fisicas: Dict[str, List[str]] = {
+            '0': ['8'],
+            '1': ['2', '4'],
+            '2': ['1', '3', '5'],
+            '3': ['2', '6'],
+            '4': ['1', '5', '7'],
+            '5': ['2', '4', '6', '8'],  # El 5 es crítico
+            '6': ['3', '5', '9'],
+            '7': ['4', '8'],
+            '8': ['5', '7', '9', '0'],
+            '9': ['6', '8']
+        }
 
-        Args:
-            actual (int): Dígito candidato.
-            previo (int): Dígito anterior en el PIN.
-
-        Returns:
-            bool: True si la transición cumple las reglas de seguridad.
+    def _es_transicion_valida(self, actual: str, previo: str) -> bool:
         """
-        # Regla 1: No repetir (ej: 44)
+        Valida reglas matemáticas Y físicas entre dos dígitos.
+        """
+        i_actual = int(actual)
+        i_previo = int(previo)
+
+        # 1. Regla: No repetir
         if actual == previo:
             return False
 
-        # Regla 2: No consecutivos lineales (ej: 45 o 54)
-        if abs(actual - previo) == 1:
+        # 2. Regla Matemática: No consecutivos lineales (1-2, 2-1)
+        if abs(i_actual - i_previo) == 1:
             return False
 
-        # Regla 3: No consecutivos circulares (ej: 09 o 90)
-        # Esto es opcional, pero recomendado para alta seguridad en teclados numéricos.
-        if {actual, previo} == {0, 9}:
+        # 3. Regla Matemática: No salto circular estricto (0-9)
+        if {i_actual, i_previo} == {0, 9}:
+            return False
+
+        # 4. Regla Topológica: No vecinos físicos
+        if actual in self.adyacencias_fisicas[previo]:
             return False
 
         return True
 
     def _calcular_entropia_bits(self, longitud: int) -> float:
         """
-        Calcula la entropía estimada (fuerza) del PIN en bits.
-        Considera la reducción del espacio muestral por las restricciones.
+        Calcula entropía ajustada a las restricciones físicas.
+        Espacio estimado: ~5 opciones válidas por paso.
         """
         if longitud < 1:
             return 0.0
-
-        # Primer dígito: 10 opciones.
-        # Siguientes dígitos: ~7 opciones válidas (se descarta mismo, +1, -1).
-        espacio_muestral = 10 * (7 ** (longitud - 1))
-        entropia = math.log2(espacio_muestral)
-        return round(entropia, 2)
+        
+        espacio_muestral = 10 * (5 ** (longitud - 1))
+        return round(math.log2(espacio_muestral), 2)
 
     def generar(self, longitud: int) -> str:
         """
-        Genera un PIN seguro verificando reglas y blacklist.
-
-        Args:
-            longitud (int): Longitud deseada del PIN.
-
-        Returns:
-            str: PIN generado.
-
-        Raises:
-            ValueError: Si la longitud es inválida.
-            RuntimeError: Si no se logra generar un PIN tras múltiples intentos.
+        Genera el PIN aplicando todas las capas de seguridad.
         """
         if not (4 <= longitud <= 8):
-            raise ValueError("La longitud debe estar entre 4 y 8 dígitos.")
+            raise ValueError("Longitud debe ser entre 4 y 8.")
+        
+        if longitud < 6:
+            logger.warning("Generando PIN de longitud %s. Se recomienda mínimo 6.", longitud)
 
         max_intentos = 10000
 
         for _ in range(max_intentos):
             pin_lista: List[str] = []
-
-            # 1. Elegir primer dígito (CSPRNG)
+            
+            # 1. Primer dígito
             primer_digito = secrets.choice(string.digits)
             pin_lista.append(primer_digito)
 
-            # 2. Construir el resto dígito a dígito
+            # 2. Construcción paso a paso
             valido_constructivamente = True
             for _ in range(longitud - 1):
-                ultimo_int = int(pin_lista[-1])
+                ultimo_char = pin_lista[-1]
 
-                # Filtrar candidatos válidos (0-9) usando comprensión de listas
                 candidatos = [
-                    str(d) for d in range(10)
-                    if self._es_transicion_valida(d, ultimo_int)
+                    d for d in string.digits
+                    if self._es_transicion_valida(d, ultimo_char)
                 ]
 
-                # Si llegamos a un callejón sin salida (raro, pero posible)
                 if not candidatos:
                     valido_constructivamente = False
                     break
 
-                # Elegir siguiente de forma segura
                 siguiente = secrets.choice(candidatos)
                 pin_lista.append(siguiente)
 
@@ -137,65 +145,69 @@ class GeneradorPinSeguro:
 
             pin_final = "".join(pin_lista)
 
-            # 3. Verificar Blacklist
+            # 3. Capa Semántica (Blacklist)
             if pin_final in self.blacklist:
-                logger.warning("PIN '%s' rechazado por Blacklist. Reintentando...", pin_final)
                 continue
 
-            # Éxito: Loguear métrica y retornar
+            # Éxito
             entropia = self._calcular_entropia_bits(longitud)
-            logger.info("PIN generado. Longitud: %d. Entropía: %s bits.", longitud, entropia)
+            logger.info("PIN generado. Longitud: %d. Entropía Real: %s bits.", longitud, entropia)
             return pin_final
 
-        logger.critical("Fallo crítico: No se generó PIN tras %d intentos.", max_intentos)
-        raise RuntimeError("No se pudo generar un PIN válido (demasiadas restricciones).")
+        raise RuntimeError("No se pudo generar PIN válido (demasiadas restricciones).")
 
+    def validar_pin_seguro(self, pin_ingresado: str, pin_real: str) -> bool:
+        """
+        Compara dos PINs usando tiempo constante (HMAC) para evitar Timing Attacks.
+        """
+        return hmac.compare_digest(pin_ingresado.encode(), pin_real.encode())
+
+
+# --- INTERFAZ DE USUARIO ---
 
 def solicitar_longitud() -> int:
-    """Solicita y valida la longitud del PIN al usuario."""
     while True:
         try:
-            entrada = input("\nIngrese la longitud del PIN (4-8 dígitos): ")
-            longitud = int(entrada)
-            if 4 <= longitud <= 8:
-                return longitud
-            print("❌ Error: La longitud debe ser entre 4 y 8.")
+            val = int(input("\nIngrese longitud (Recomendado 6-8): "))
+            if 4 <= val <= 8:
+                return val
+            print("❌ Rango permitido: 4-8.")
         except ValueError:
-            print("❌ Error: Por favor ingrese un número entero válido.")
-
+            print("❌ Ingrese número válido.")
 
 def main():
-    """Función principal de interacción con el usuario."""
     print("=" * 60)
-    print("🔒 GENERADOR DE PIN SEGURO (CSPRNG + Anti-Patrones)")
+    print("🛡️  GENERADOR DE PIN BLINDADO (Topológico + Semántico)")
     print("=" * 60)
 
-    # Instancia del generador (Lógica)
-    generador = GeneradorPinSeguro()
+    generador = GeneradorPinBlindado()
 
     try:
-        # Interacción (UI)
         longitud = solicitar_longitud()
-
-        # Proceso
-        print("⚙️  Generando PIN criptográficamente seguro...")
-        pin_generado = generador.generar(longitud)
-
-        # Salida
-        print(f"\n✅ PIN Generado exitosamente: {pin_generado}")
+        
+        print("⚙️  Analizando topología del teclado y entropía...")
+        pin = generador.generar(longitud)
+        
+        print(f"\n✅ PIN Generado: {pin}")
         print("-" * 30)
-        print("ℹ️  Detalles de Seguridad:")
-        print("   • Método: secrets (CSPRNG del Sistema Operativo)")
-        print("   • Validación: No consecutivos, no repetidos, no blacklist")
+        print("ℹ️  Capas de Defensa:")
+        print("   1. [Matemática] Sin consecutivos")
+        print("   2. [Física] Sin adyacentes de teclado")
+        print("   3. [Semántica] Sin Blacklist")
+        print("   4. [Cripto] Secrets + HMAC validation")
+
+        # Simulación de validación
+        print("-" * 30)
+        prueba = input("📝 (Simulación) Ingrese el PIN para validar: ")
+        if generador.validar_pin_seguro(prueba, pin):
+            print("🔓 Acceso Concedido")
+        else:
+            print("🔒 Acceso Denegado")
 
     except KeyboardInterrupt:
-        print("\n\n⚠️  Programa interrumpido por el usuario.")
         sys.exit(0)
     except Exception as e:
-        print(f"\n❌ Ocurrió un error inesperado: {e}")
-        logger.exception("Error no controlado en main")
-        sys.exit(1)
-
+        logger.exception("Error fatal")
 
 if __name__ == "__main__":
     main()

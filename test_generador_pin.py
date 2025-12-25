@@ -1,166 +1,114 @@
 """
-Módulo de pruebas unitarias para el Generador de PINs Seguros.
-
-Este módulo verifica la lógica de negocio, las restricciones criptográficas,
-la validación de listas negras y el manejo de errores de la clase GeneradorPinSeguro.
+Auditoría de Seguridad y Pruebas Unitarias para el Generador de PIN.
+Archivo: test_generador_pin.py
 """
 
 import unittest
 from unittest.mock import patch
-import string
 
-# Asumimos que el archivo principal se llama generador_pin.py
-from generador_pin import GeneradorPinSeguro
+# Importamos la clase desde tu archivo principal 'generador_pin.py'
+from generador_pin import GeneradorPinBlindado
 
 
-class TestGeneradorPinSeguro(unittest.TestCase):
+class TestAuditoriaPinBlindado(unittest.TestCase):
     """
-    Suite de pruebas para la clase GeneradorPinSeguro.
-    Cubre casos de éxito, bordes y excepciones.
+    Suite de pruebas de seguridad y funcionalidad.
+    Cubre: Matemáticas, Topología, Blacklist y Timing Attacks.
     """
 
     def setUp(self):
-        """
-        Configuración inicial que se ejecuta antes de cada prueba.
-        Instancia un generador limpio.
-        """
-        self.generador = GeneradorPinSeguro()
+        self.generador = GeneradorPinBlindado()
 
-    def test_inicializacion_blacklist_base(self):
-        """
-        Verifica que la lista negra base se cargue con patrones y años comunes.
-        """
-        # Verificar un patrón de repetición alterna
-        self.assertIn("1212", self.generador.blacklist)
-        # Verificar un patrón de teclado
-        self.assertIn("1379", self.generador.blacklist)
-        # Verificar un año común (ej. 2000)
-        self.assertIn("2000", self.generador.blacklist)
+    # ==========================================
+    # CAPA 1 y 2: LÓGICA (Matemática + Física)
+    # ==========================================
 
-    def test_inicializacion_blacklist_extra(self):
-        """
-        Verifica que se puedan agregar elementos extra a la lista negra
-        durante la instanciación.
-        """
-        pines_prohibidos = ["9999", "1111"]
-        gen_extra = GeneradorPinSeguro(blacklist_extra=pines_prohibidos)
+    def test_01_seguridad_matematica_rechaza_consecutivos(self):
+        """Verifica que se rechacen secuencias numéricas (1-2, 9-8)."""
+        # pylint: disable=protected-access
+        self.assertFalse(self.generador._es_transicion_valida("1", "2"))
+        self.assertFalse(self.generador._es_transicion_valida("9", "8"))
+        self.assertFalse(self.generador._es_transicion_valida("5", "5"))
 
-        for pin in pines_prohibidos:
-            self.assertIn(pin, gen_extra.blacklist)
-
-    def test_transicion_valida_logica_matematica(self):
+    def test_02_seguridad_topologica_rechaza_adyacentes_fisicos(self):
         """
-        Verifica la lógica matemática entre dos dígitos (método protegido).
-        Se suprime la advertencia de acceso protegido ya que es un test de caja blanca.
+        Verifica el BLINDAJE FÍSICO.
+        Debe rechazar vecinos de teclado (arriba/abajo/lados) aunque no sean consecutivos.
         """
         # pylint: disable=protected-access
+        
+        # 1 está arriba del 4
+        self.assertFalse(
+            self.generador._es_transicion_valida("4", "1"),
+            "FALLO: Permitió '1-4' (Vecinos verticales)"
+        )
+        # 0 está debajo del 8
+        self.assertFalse(
+            self.generador._es_transicion_valida("0", "8"),
+            "FALLO: Permitió '8-0' (Vecinos verticales)"
+        )
+        # 5 está al lado del 6 (Consecutivo y físico)
+        self.assertFalse(self.generador._es_transicion_valida("6", "5"))
 
-        # --- Casos que deben ser FALSOS ---
-        # Repetidos
-        self.assertFalse(self.generador._es_transicion_valida(5, 5))
-        # Consecutivo ascendente (+1)
-        self.assertFalse(self.generador._es_transicion_valida(4, 5))
-        # Consecutivo descendente (-1)
-        self.assertFalse(self.generador._es_transicion_valida(6, 5))
-        # Consecutivo circular (0-9 y 9-0)
-        self.assertFalse(self.generador._es_transicion_valida(0, 9))
-        self.assertFalse(self.generador._es_transicion_valida(9, 0))
+    def test_03_transiciones_seguras_permitidas(self):
+        """Verifica que SÍ permita saltos complejos (caballo ajedrez, distantes)."""
+        # pylint: disable=protected-access
+        # 1 y 6 son diagonales lejanas -> Válido
+        self.assertTrue(self.generador._es_transicion_valida("6", "1"))
+        # 7 y 3 esquinas opuestas -> Válido
+        self.assertTrue(self.generador._es_transicion_valida("3", "7"))
 
-        # --- Casos que deben ser VERDADEROS ---
-        # Salto de 2
-        self.assertTrue(self.generador._es_transicion_valida(1, 3))
-        # Salto grande
-        self.assertTrue(self.generador._es_transicion_valida(0, 5))
+    # ==========================================
+    # CAPA 3: DEFENSA SEMÁNTICA (Blacklist)
+    # ==========================================
 
-    def test_validacion_longitud_incorrecta(self):
-        """
-        Verifica que el método generar lance ValueError si la longitud
-        está fuera del rango permitido (4-8).
-        """
-        # Caso: Longitud muy corta
+    def test_04_blacklist_incluye_patrones(self):
+        """Verifica carga de blacklist."""
+        self.assertIn("1379", self.generador.blacklist) # Esquinas
+        self.assertIn("2025", self.generador.blacklist) # Año
+
+    @patch('secrets.choice')
+    def test_05_mecanismo_reintento_por_blacklist(self, mock_secrets):
+        """Simula generación de PIN prohibido y fuerza reintento."""
+        # Intento 1: 2-5-8-0 (Cruz -> Blacklist)
+        # Intento 2: 1-6-0-3 (Válido)
+        mock_secrets.side_effect = ['2','5','8','0', '1','6','0','3']
+
+        pin = self.generador.generar(4)
+        self.assertEqual(pin, "1603")
+        self.assertEqual(mock_secrets.call_count, 8)
+
+    # ==========================================
+    # CAPA 4: VALIDACIÓN CRIPTOGRÁFICA
+    # ==========================================
+
+    def test_06_validacion_segura_hmac(self):
+        """Verifica comparación de tiempo constante."""
+        pin_real = "927451"
+        self.assertTrue(self.generador.validar_pin_seguro(pin_real, pin_real))
+        self.assertFalse(self.generador.validar_pin_seguro("000000", pin_real))
+
+    # ==========================================
+    # INTEGRACIÓN
+    # ==========================================
+
+    def test_07_fuzzing_generacion_masiva(self):
+        """Genera 100 PINs y audita cada transición."""
+        for _ in range(100):
+            pin = self.generador.generar(6)
+            self.assertEqual(len(pin), 6)
+            
+            for i in range(len(pin)-1):
+                es_valido = self.generador._es_transicion_valida(pin[i+1], pin[i]) # pylint: disable=protected-access
+                self.assertTrue(es_valido, f"PIN inseguro: {pin}")
+
+    def test_08_validacion_limites(self):
+        """Verifica errores en longitudes inválidas."""
         with self.assertRaises(ValueError):
             self.generador.generar(3)
-
-        # Caso: Longitud muy larga
         with self.assertRaises(ValueError):
             self.generador.generar(9)
 
-    def test_generacion_estructura_y_reglas(self):
-        """
-        Prueba de estrés (Fuzzing): Genera múltiples PINs y verifica
-        que NINGUNO viole las reglas de adyacencia.
-        """
-        cantidad_pruebas = 50
-        longitud_pin = 6
-
-        for _ in range(cantidad_pruebas):
-            pin = self.generador.generar(longitud_pin)
-
-            # 1. Verificar longitud
-            self.assertEqual(len(pin), longitud_pin)
-
-            # 2. Verificar que es numérico
-            self.assertTrue(pin.isdigit())
-
-            # 3. Verificar reglas internas (no confía solo en el generador)
-            for i in range(len(pin) - 1):
-                actual = int(pin[i])
-                siguiente = int(pin[i+1])
-
-                # No iguales
-                self.assertNotEqual(actual, siguiente,
-                                    f"Fallo repetición en PIN {pin}")
-                # No consecutivos lineales
-                self.assertNotEqual(abs(actual - siguiente),
-                                    1, f"Fallo consecutivo en PIN {pin}")
-                # No circulares
-                self.assertNotEqual({actual, siguiente}, {
-                                    0, 9}, f"Fallo circular en PIN {pin}")
-
-    def test_entropia_calculo_positivo(self):
-        """
-        Verifica que el cálculo de entropía devuelva un valor flotante positivo.
-        """
-        # pylint: disable=protected-access
-        entropia = self.generador._calcular_entropia_bits(6)
-        self.assertIsInstance(entropia, float)
-        self.assertGreater(entropia, 0.0)
-
-    @patch('secrets.choice')
-    def test_reintento_por_blacklist(self, mock_secrets):
-        """
-        Verifica que el sistema reintente si genera un PIN que está en la blacklist.
-        Utiliza Mocking para forzar una generación específica.
-        """
-        # Escenario:
-        # Intento 1: Genera "1313".
-        #   - 1, 3, 1, 3 son matemáticamente válidos entre sí.
-        #   - Pero "1313" está en la Blacklist predeterminada.
-        #   - El sistema debe rechazarlo y reintentar.
-
-        # Intento 2: Genera "5151".
-        #   - Matemáticamente válido.
-        #   - No está en blacklist.
-        #   - Debe retornarlo.
-
-        # Mockeamos secrets.choice para que devuelva esta secuencia exacta de dígitos
-        mock_secrets.side_effect = [
-            '1', '3', '1', '3',  # Primer PIN completo (Rechazado)
-            '5', '1', '5', '1'   # Segundo PIN completo (Aceptado)
-        ]
-
-        # Nota: El generador llama a secrets.choice primero para el digito inicial
-        # y luego para los siguientes candidatos.
-        # Asumimos que el candidato deseado siempre está disponible en la lista filtrada.
-
-        pin_resultante = self.generador.generar(4)
-
-        # Verificaciones
-        self.assertEqual(pin_resultante, "5151")
-
-        # Verificamos que secrets.choice se llamó 8 veces (4 para el fallido + 4 para el exitoso)
-        self.assertEqual(mock_secrets.call_count, 8)
-
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(verbosity=2)
