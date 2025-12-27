@@ -93,27 +93,55 @@ class GeneradorPinBlindado:
 
         return True
 
-    def _calcular_entropia_bits(self, longitud: int) -> float:
+    def _calcular_entropia_bits(self, longitud: int, strict_security: bool = True) -> float:
         """
-        Calcula entropía ajustada a las restricciones físicas.
-        Espacio estimado: ~5 opciones válidas por paso.
+        Calcula entropía ajustada según el modo de seguridad.
+        
+        Con seguridad (strict_security=True):
+            - Espacio muestral: 10 * (5 ^ (n-1)) = ~5 opciones válidas por paso
+            - Debido a: no consecutivos, no adyacentes, sin blacklist
+            
+        Sin seguridad (strict_security=False):
+            - Espacio muestral: 10 ^ n = todas las combinaciones posibles
         """
         if longitud < 1:
             return 0.0
         
-        espacio_muestral = 10 * (5 ** (longitud - 1))
+        if strict_security:
+            # Con restricciones: ~5 opciones por paso después del primero
+            espacio_muestral = 10 * (5 ** (longitud - 1))
+        else:
+            # Sin restricciones: 10 dígitos en cualquier posición
+            espacio_muestral = 10 ** longitud
+        
         return round(math.log2(espacio_muestral), 2)
 
-    def generar(self, longitud: int) -> str:
+    def generar(self, longitud: int, strict_security: bool = True) -> str:
         """
-        Genera el PIN aplicando todas las capas de seguridad.
+        Genera el PIN con opciones de seguridad.
+        
+        Args:
+            longitud: Longitud del PIN (4-32)
+            strict_security: Si True, aplica todas las capas (topología + blacklist)
+                           Si False, genera números aleatorios sin restricciones
+        
+        Returns:
+            PIN generado
         """
-        if not (4 <= longitud <= 8):
-            raise ValueError("Longitud debe ser entre 4 y 8.")
+        if not (4 <= longitud <= 32):
+            raise ValueError("Longitud debe ser entre 4 y 32.")
         
         if longitud < 6:
             logger.warning("Generando PIN de longitud %s. Se recomienda mínimo 6.", longitud)
 
+        # Si NO requiere seguridad estricta, generar sin restricciones
+        if not strict_security:
+            pin_final = "".join(secrets.choice(string.digits) for _ in range(longitud))
+            entropia = self._calcular_entropia_bits(longitud, strict_security=False)
+            logger.info("PIN generado (sin seguridad). Longitud: %d. Entropía Real: %s bits.", longitud, entropia)
+            return pin_final
+
+        # Si SÍ requiere seguridad estricta, aplicar todas las capas
         max_intentos = 10000
 
         for _ in range(max_intentos):
@@ -150,8 +178,8 @@ class GeneradorPinBlindado:
                 continue
 
             # Éxito
-            entropia = self._calcular_entropia_bits(longitud)
-            logger.info("PIN generado. Longitud: %d. Entropía Real: %s bits.", longitud, entropia)
+            entropia = self._calcular_entropia_bits(longitud, strict_security=True)
+            logger.info("PIN generado (CON seguridad). Longitud: %d. Entropía Real: %s bits.", longitud, entropia)
             return pin_final
 
         raise RuntimeError("No se pudo generar PIN válido (demasiadas restricciones).")
